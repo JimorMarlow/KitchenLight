@@ -8,14 +8,12 @@
 #include <GTimer.h>
 
 #include "etl/etl_led.h"
-etl::shared_ptr<etl::led> fadeLED;// = etl::make_shared<etl::led>(LED_FADE, false);
-
-etl::shared_ptr<etl::led> lightLED = etl::make_shared<etl::led>(LED_FADE, false);
+etl::shared_ptr<etl::led> lightLED = etl::make_shared<etl::led>(LED_PIN, false);
 volatile bool light_status = false;
 
-// Запуск по интервалу
-uint32_t FADE_INTERVAL = 3000;
-uint32_t FADE_PAUSE = 3000;
+// Сигнал - плавно мигнуть для пользователя в качестве обратной связи
+uint32_t FADE_INTERVAL = 300;
+uint32_t FADE_PAUSE = 300;
 bool fade_direction = true;
 etl::unique_ptr<GTimer<millis>> time_fade_pause;
 
@@ -34,13 +32,6 @@ void setup() {
     
     Serial.println("start...");
 
-    if(fadeLED) {
-      Serial.println("fade started...");
-      fadeLED->init_pwm(FADE_CHANNEL, 30000, 10); // Чтобы не было слышно пищания на низкой частоте - сделать 30КГц и максимально возможное разрешение 10 бит для плавности
-      if(fade_direction) fadeLED->fade_in(FADE_INTERVAL); else fadeLED->fade_out(FADE_INTERVAL);
-      Serial.printf("start fade %s\n", fade_direction ? "in" : "out");
-    }
-
     if(lightLED)
     {
       Serial.println("light control started...");
@@ -57,7 +48,7 @@ void setup() {
     if (!sensor.init())
     {
       Serial.println("Failed to detect and initialize sensor!");
-      while (1) {}
+    //  while (1) {}
     }
 
     // Start continuous back-to-back mode (take readings as
@@ -96,30 +87,5 @@ void loop()
       }
     }  
   }
-  // плавное включение и выключение LED, в выключенном положении пауза, чтобы оценить правильность затемнения без мерцания
-  if(time_fade_pause && time_fade_pause->tick())
-  {
-    // start new cycle
-    time_fade_pause.reset();
-    fade_direction = true;
-    if(fadeLED) fadeLED->fade_in(FADE_INTERVAL); 
-  }
-  else
-  {
-    if(fadeLED && fadeLED->tick()) // 
-    {
-      fade_direction = !fade_direction;
-      if(fade_direction)
-      {
-        // На новом цикле делаем паузу в выключенном состоянии, чтобы посмотреть, не мигает ли лента
-        time_fade_pause = etl::make_unique<GTimer<millis>>(FADE_PAUSE, true, GTMode::Interval);
-      }
-      else
-      {
-        fadeLED->fade_out(FADE_INTERVAL);
-      }
-      Serial.printf("main: fade %s\n", fade_direction ? "in" : "out");
-        
-    }
-  }
+  
 }
