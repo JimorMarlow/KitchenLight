@@ -23,6 +23,11 @@ etl::unique_ptr<GTimer<millis>> time_fade_pause;
 #include <EncButton.h>
 Button btn(BTN_PIN);
 
+// Лазерный датчик измерения расстояния
+#include <Wire.h>
+#include <VL53L0X.h>
+VL53L0X sensor;
+
 void setup() {
     Serial.begin(115200);
     if(SERIAL_INIT_DELAY > 0) delay(SERIAL_INIT_DELAY);  // для ESP32 C3 supermini нуждо сделать задержку, чтобы выводилась отладочная информация
@@ -46,16 +51,32 @@ void setup() {
       }
     }
 
-    // Ручная настройка
-    // задаём настройки ШИМ-канала:                                         
- //   ledcSetup(LIGHT_CHANNEL, LIGHT_FREQUENCY, LIGHT_RESOLUTION);
-    // подключаем ШИМ-канал к пину светодиода:                                         
-  //  ledcAttachPin(LED_FADE, LIGHT_CHANNEL);
+    // Датчик расстояния
+    Wire.begin();
+    sensor.setTimeout(500);
+    if (!sensor.init())
+    {
+      Serial.println("Failed to detect and initialize sensor!");
+      while (1) {}
+    }
+
+    // Start continuous back-to-back mode (take readings as
+    // fast as possible).  To use continuous timed mode
+    // instead, provide a desired inter-measurement period in
+    // ms (e.g. sensor.startContinuous(100)).
+    sensor.startContinuous();
 }
 
 void loop() 
 {
+  // расстояние
+  Serial.printf("distance: %d mm\n", sensor.readRangeContinuousMillimeters());
+  if (sensor.timeoutOccurred()) { Serial.println("distance sensor TIMEOUT"); }
+
+  // Управление светом
   if(lightLED) lightLED->tick();
+
+  // Опрос кнопки переключения света
   btn.tick();
   if(btn.click())
   {
