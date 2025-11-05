@@ -6,3 +6,6 @@
 ### Dependancy
 - etl-esp  моя библиотека для работы с esp8266/esp32 под Ардуино платформу
 - GTimer от AlexGyver
+
+### Обновление библиотек
+pio pkg update
