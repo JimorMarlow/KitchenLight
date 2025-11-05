@@ -10,6 +10,7 @@
 #include "etl/etl_led.h"
 etl::shared_ptr<etl::led> lightLED = etl::make_shared<etl::led>(LED_PIN, false);
 volatile bool light_status = false;
+etl::led::fade_t welcome_blink[] = {{0, 0.0}, {500, 1.0}, {500, 0.0}};
 
 // Сигнал - плавно мигнуть для пользователя в качестве обратной связи
 uint32_t FADE_INTERVAL = 300;
@@ -30,7 +31,7 @@ void setup() {
     Serial.begin(115200);
     if(SERIAL_INIT_DELAY > 0) delay(SERIAL_INIT_DELAY);  // для ESP32 C3 supermini нуждо сделать задержку, чтобы выводилась отладочная информация
     
-    Serial.println("start...");
+    Serial.printf("KitchenLight v%s started...\n", String(KL_VERSION_STRING).c_str());
 
     if(lightLED)
     {
@@ -40,6 +41,7 @@ void setup() {
       {
         lightLED->fade_out(LIGHT_TOGGLE_DELAY);
       }
+      //lightLED->fade(welcome_blink);
     }
 
     // Датчик расстояния
@@ -61,9 +63,23 @@ void setup() {
 void loop() 
 {
   // расстояние
-  Serial.printf("distance: %d mm\n", sensor.readRangeContinuousMillimeters());
   if (sensor.timeoutOccurred()) { Serial.println("distance sensor TIMEOUT"); }
-
+  else {
+    uint16_t distance = sensor.readRangeContinuousMillimeters();
+    Serial.printf("distance: %d mm\n", distance);
+    if(distance < 100 && light_status)
+    {
+      light_status = false;
+      if(lightLED) lightLED->fade_in(LIGHT_GUESTURE_DELAY);
+      Serial.printf("Toggle light by distance %s\n", light_status ? "ON" : "OFF");
+    }
+    else if(distance > 150 && distance < 500 && !light_status)
+    {
+      light_status = true;
+      if(lightLED) lightLED->fade_out(LIGHT_GUESTURE_DELAY);
+      Serial.printf("Toggle light by distance %s\n", light_status ? "ON" : "OFF");
+    }
+  }
   // Управление светом
   if(lightLED) lightLED->tick();
 
@@ -72,7 +88,7 @@ void loop()
   if(btn.click())
   {
     light_status = !light_status;
-    Serial.printf("Toggle light %s\n", light_status ? "ON" : "OFF");
+    Serial.printf("Toggle light by button %s\n", light_status ? "ON" : "OFF");
     if(lightLED)
     {
       if(light_status)

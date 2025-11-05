@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include "version.h"
 
 // НЕЛЬЗЯ встроенный, он не совпадает с нашей ESP32 C3 PRO MINI и уводит плату в панику при записи в 30 GPIO, нужно напрямую указать 8
 #undef LED_BUILTIN
@@ -14,3 +15,4 @@ const uint32_t LIGHT_RESOLUTION = 10;
 
 const int BTN_PIN = 7; // GPIO 7
 uint32_t LIGHT_TOGGLE_DELAY = 1500;
+uint32_t LIGHT_GUESTURE_DELAY = 500;
