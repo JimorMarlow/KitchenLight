@@ -5,7 +5,8 @@
 
 ### Dependancy
 - etl моя библиотека для работы с esp8266/esp32 под Ардуино платформу https://github.com/JimorMarlow/etl@^0.9.1
-- GTimer, EncButton от AlexGyver
+- GTimer от AlexGyver: https://github.com/GyverLibs/GTimer
+- EncButton от AlexGyver: https://github.com/GyverLibs/EncButton
 - https://github.com/pololu/vl53l0x-arduino библиотека работы с лазерным датчиком расстояния VL53L0X
 
 ### Обновление библиотек
