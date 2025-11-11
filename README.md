@@ -14,6 +14,9 @@ pio pkg update
 
 ### История измениний
 
+#### 0.1.4 (2025-11-11)
+- Реорганизация управляющих элемнтов
+
 #### 0.1.3 (2025-11-05)
 - version scrypt update
 - fade using etl::led::fade with etl::lookup table (in progress)
