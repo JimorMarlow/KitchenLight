@@ -10,8 +10,9 @@
 
 #include "etl/etl_led.h"
 etl::shared_ptr<etl::led> lightLED = etl::make_shared<etl::led>(LED_PIN, false);
+#include "light_control.h"
+light_control light(lightLED, LIGHT_TOGGLE_DELAY);
 volatile float brightness_level = 1.0; // запомненный уровень яркости 
-etl::led::fade_t welcome_blink[] = {{0, 0.0}, {500, 1.0}, {500, 0.0}};
 
 // Сигнал - плавно мигнуть для пользователя в качестве обратной связи
 uint32_t FADE_INTERVAL = 300;
@@ -36,13 +37,12 @@ void setup() {
     
     Serial.printf("KitchenLight v%s started...\n", String(KL_VERSION_STRING).c_str());
 
-    if(lightLED)
-    {
-      Serial.println("light control started...");
-      lightLED->init_pwm(LIGHT_CHANNEL, LIGHT_FREQUENCY, LIGHT_RESOLUTION); // Чтобы не было слышно пищания на низкой частоте - сделать 30КГц и максимально возможное разрешение 10 бит для плавности
+  
+    Serial.println("light control started...");
+    light.init(LIGHT_CHANNEL, LIGHT_FREQUENCY, LIGHT_RESOLUTION); // Чтобы не было слышно пищания на низкой частоте - сделать 30КГц и максимально возможное разрешение 10 бит для плавности
     //  lightLED->fade(welcome_blink);
-    }
-
+    light.set_brightness(brightness_level);
+   
     // Датчик расстояния
     Wire.begin();
     sensor.setTimeout(500);
@@ -62,13 +62,10 @@ void setup() {
 void loop() 
 {
   // Управление светом
-  etl::optional<float> brightness;
-  bool light_status = false;
-  if(lightLED) { 
-    lightLED->tick();
-    brightness = lightLED->get_brightness();
-    light_status = brightness.value() > 0.0;
-    Serial.printf("brightness = %g, light_status = %s\n", brightness.value(), light_status ? "ON" : "OFF");
+  if(light.tick()) { 
+    auto brightness = light.brightness();
+    auto light_status = light.is_active();
+    Serial.printf("FADE END: brightness = %g, light_status = %s\n", brightness, light_status ? "ON" : "OFF");
   }
 
   // расстояние
@@ -76,22 +73,28 @@ void loop()
   else {
     uint16_t distance = sensor.readRangeContinuousMillimeters();
     //Serial.printf("distance: %d mm\n", distance);
-    if((millis() - guesture_time) > GUESTURE_DELAY && brightness)
+    if((millis() - guesture_time) > GUESTURE_DELAY)
     {
-      if(distance < 100 && light_status)
+      if(distance < 100 && light.is_active())
       {
         // OFF light
         guesture_time = millis();
-        if(lightLED) lightLED->fade_in(LIGHT_GUESTURE_DELAY);
+        light.set_active(false);
         Serial.printf("Toggle light by distance OFF\n");
       }
-      else if(distance > 150 && distance < 500 && !light_status)
+      else if(distance > 150 && distance < 500 && !light.is_active())
       {
         // ON light
         guesture_time = millis();
-        if(lightLED) lightLED->fade_out(LIGHT_GUESTURE_DELAY);
+        light.set_active(true);
         Serial.printf("Toggle light by distance ON\n");
       }
+      // else if(distance > 600 && distance < 700)
+      // {
+      //   guesture_time = millis();
+      //   Serial.printf("Welcome blink test\n");
+      //   light.welcome_blink();
+      // }
     }
   }
   
@@ -99,22 +102,11 @@ void loop()
   btn.tick();
   if(btn.click())
   {
-    if(lightLED && (millis() - guesture_time) > GUESTURE_DELAY && brightness)
+    if((millis() - guesture_time) > GUESTURE_DELAY)
     {
-      if(!light_status)
-      {
-        //lightLED->on();
-        guesture_time = millis();
-        Serial.printf("Toggle light by button ON\n");
-        lightLED->fade_in(LIGHT_TOGGLE_DELAY);
-      }
-      else
-      {
-        //lightLED->off();
-        guesture_time = millis();
-        Serial.printf("Toggle light by button OFF\n");
-        lightLED->fade_out(LIGHT_TOGGLE_DELAY);
-      }
+      guesture_time = millis();
+      light.set_active(!light.is_active());
+      Serial.printf("Toggle light by button %s\n", light.is_active() ? "ON":"OFF");
     }  
   }
   
