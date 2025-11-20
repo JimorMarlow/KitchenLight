@@ -557,3 +557,458 @@ void printDeviceInfo() {
 Легко идентифицировать - по имени видно какое это устройство
 
 Теперь вы можете заходить на устройство по красивому URL вместо IP! 🎯
+
+## переделать сохранение данных в EEPROM на эту библиотеку для более рационального использования флеш-памяти https://github.com/GyverLibs/FileData
+
+FileData гораздо эффективнее использует флеш-память. Переделаем нашу систему хранения настроек:
+
+Установка библиотеки
+Сначала установите FileData через менеджер библиотек Arduino:
+
+GyverLibs > FileData
+
+Или через URL: https://github.com/GyverLibs/FileData
+
+Переработанная система хранения настроек с FileData
+cpp
+#include <FileData.h>
+
+class KeyValueStorage {
+private:
+    FileData _fileData;
+    bool _initialized = false;
+    bool _dirty = false; // Флаг изменений для отложенной записи
+
+public:
+    KeyValueStorage() : _fileData("/config.dat", 300, 'B') {} // 300 байт, бинарный режим
+    
+    bool begin() {
+        if (!_initialized) {
+            if (_fileData.init()) {
+                Serial.println("KeyValueStorage initialized with FileData");
+                _initialized = true;
+                return true;
+            } else {
+                Serial.println("Failed to initialize FileData");
+                return false;
+            }
+        }
+        return true;
+    }
+    
+    // Запись строкового значения
+    bool putString(const char* key, const char* value) {
+        if (!_initialized && !begin()) return false;
+        
+        String current = _fileData.readString(key, "");
+        if (current != value) {
+            _fileData.updateString(key, value);
+            _dirty = true;
+            return true;
+        }
+        return false; // Значение не изменилось
+    }
+    
+    // Чтение строкового значения
+    String getString(const char* key, const char* defaultValue = "") {
+        if (!_initialized && !begin()) return String(defaultValue);
+        return _fileData.readString(key, defaultValue);
+    }
+    
+    // Запись целого числа
+    bool putInt(const char* key, int value) {
+        if (!_initialized && !begin()) return false;
+        
+        int current = _fileData.readInt(key, value - 1); // Гарантируем различие
+        if (current != value) {
+            _fileData.updateInt(key, value);
+            _dirty = true;
+            return true;
+        }
+        return false;
+    }
+    
+    // Чтение целого числа
+    int getInt(const char* key, int defaultValue = 0) {
+        if (!_initialized && !begin()) return defaultValue;
+        return _fileData.readInt(key, defaultValue);
+    }
+    
+    // Запись булева значения
+    bool putBool(const char* key, bool value) {
+        return putInt(key, value ? 1 : 0);
+    }
+    
+    // Чтение булева значения
+    bool getBool(const char* key, bool defaultValue = false) {
+        return getInt(key, defaultValue ? 1 : 0) != 0;
+    }
+    
+    // Запись float
+    bool putFloat(const char* key, float value) {
+        if (!_initialized && !begin()) return false;
+        
+        float current = _fileData.readFloat(key, value - 1.0f);
+        if (abs(current - value) > 0.001f) {
+            _fileData.updateFloat(key, value);
+            _dirty = true;
+            return true;
+        }
+        return false;
+    }
+    
+    // Чтение float
+    float getFloat(const char* key, float defaultValue = 0.0) {
+        if (!_initialized && !begin()) return defaultValue;
+        return _fileData.readFloat(key, defaultValue);
+    }
+    
+    // Удаление ключа
+    bool remove(const char* key) {
+        if (!_initialized && !begin()) return false;
+        
+        if (_fileData.checkKey(key)) {
+            _fileData.remove(key);
+            _dirty = true;
+            return true;
+        }
+        return false;
+    }
+    
+    // Принудительное сохранение изменений
+    bool commit() {
+        if (_dirty) {
+            _dirty = false;
+            return _fileData.updateNow();
+        }
+        return true;
+    }
+    
+    // Очистка всех данных
+    bool clear() {
+        if (!_initialized && !begin()) return false;
+        _dirty = true;
+        return _fileData.removeAll();
+    }
+    
+    // Автоматическое сохранение при разрушении объекта
+    ~KeyValueStorage() {
+        commit();
+    }
+    
+    // Вывод всех ключей (для отладки)
+    void listAll() {
+        if (!_initialized && !begin()) return;
+        
+        Serial.println("=== KeyValueStorage Contents ===");
+        Serial.printf("File size: %d bytes\n", _fileData.size());
+        Serial.printf("Keys count: %d\n", _fileData.listSize());
+        
+        // FileData не имеет прямого метода для листинга ключей,
+        // но мы можем проверить основные ключи
+        String keys[] = {
+            "wifi_ssid", "wifi_pass", "mqtt_server", "mqtt_port",
+            "mqtt_user", "mqtt_pass", "device_name", "brightness", "auto_off"
+        };
+        
+        for (const String& key : keys) {
+            if (_fileData.checkKey(key.c_str())) {
+                String value = _fileData.readString(key.c_str(), "[not set]");
+                Serial.printf("  %s = %s\n", key.c_str(), value.c_str());
+            }
+        }
+        Serial.println("=================================");
+    }
+};
+
+// Глобальный экземпляр
+KeyValueStorage Settings;
+Оптимизированный класс настроек устройства
+cpp
+class DeviceSettings {
+private:
+    bool _settingsLoaded = false;
+    unsigned long _lastAutoSave = 0;
+    const unsigned long AUTO_SAVE_INTERVAL = 30000; // 30 секунд
+
+public:
+    // Ключи для хранения настроек
+    struct Keys {
+        static const char* WIFI_SSID;
+        static const char* WIFI_PASSWORD;
+        static const char* MQTT_SERVER;
+        static const char* MQTT_PORT;
+        static const char* MQTT_USER;
+        static const char* MQTT_PASSWORD;
+        static const char* DEVICE_NAME;
+        static const char* BRIGHTNESS;
+        static const char* AUTO_OFF;
+        static const char* AP_PASSWORD;
+        static const char* HOSTNAME;
+    };
+
+    DeviceSettings() = default;
+
+    bool begin() {
+        if (Settings.begin()) {
+            loadDefaultsIfNeeded();
+            _settingsLoaded = true;
+            Serial.println("DeviceSettings initialized successfully");
+            return true;
+        }
+        return false;
+    }
+
+    // Автоматическое сохранение в loop
+    void update() {
+        if (millis() - _lastAutoSave > AUTO_SAVE_INTERVAL) {
+            Settings.commit();
+            _lastAutoSave = millis();
+        }
+    }
+
+    // Загрузка настроек по умолчанию при первом запуске
+    void loadDefaultsIfNeeded() {
+        if (Settings.getString(Keys::DEVICE_NAME).length() == 0) {
+            Serial.println("First boot - loading default settings");
+            
+            // Генерируем уникальные значения на основе MAC
+            String mac = WiFi.macAddress();
+            mac.replace(":", "");
+            String shortMac = mac.substring(6);
+            
+            setDeviceName("KitchenLight_" + shortMac);
+            setWiFiCredentials("", "");
+            setMQTTSettings("wqtt.ru", 1883, "", "");
+            setBrightness(100);
+            setAutoOff(false);
+            
+            // Генерируем пароль для точки доступа
+            String apPassword = generatePasswordFromMAC(mac);
+            setAPPassword(apPassword);
+            
+            // Генерируем hostname
+            setHostname("klight-" + shortMac.toLowerCase());
+            
+            // Принудительно сохраняем настройки по умолчанию
+            Settings.commit();
+            
+            Serial.println("Default settings loaded and saved");
+        }
+    }
+
+    // WiFi настройки
+    void setWiFiCredentials(const String& ssid, const String& password) {
+        if (Settings.putString(Keys::WIFI_SSID, ssid.c_str()) ||
+            Settings.putString(Keys::WIFI_PASSWORD, password.c_str())) {
+            Serial.println("WiFi settings updated");
+        }
+    }
+
+    String getWiFiSSID() { return Settings.getString(Keys::WIFI_SSID); }
+    String getWiFiPassword() { return Settings.getString(Keys::WIFI_PASSWORD); }
+
+    // MQTT настройки
+    void setMQTTSettings(const String& server, int port, const String& user, const String& password) {
+        bool changed = false;
+        changed |= Settings.putString(Keys::MQTT_SERVER, server.c_str());
+        changed |= Settings.putInt(Keys::MQTT_PORT, port);
+        changed |= Settings.putString(Keys::MQTT_USER, user.c_str());
+        changed |= Settings.putString(Keys::MQTT_PASSWORD, password.c_str());
+        
+        if (changed) {
+            Serial.println("MQTT settings updated");
+        }
+    }
+
+    String getMQTTServer() { return Settings.getString(Keys::MQTT_SERVER, "wqtt.ru"); }
+    int getMQTTPort() { return Settings.getInt(Keys::MQTT_PORT, 1883); }
+    String getMQTTUser() { return Settings.getString(Keys::MQTT_USER); }
+    String getMQTTPassword() { return Settings.getString(Keys::MQTT_PASSWORD); }
+
+    // Настройки устройства
+    void setDeviceName(const String& name) {
+        if (Settings.putString(Keys::DEVICE_NAME, name.c_str())) {
+            Serial.println("Device name updated: " + name);
+        }
+    }
+
+    String getDeviceName() { 
+        return Settings.getString(Keys::DEVICE_NAME, "KitchenLight");
+    }
+
+    void setBrightness(int brightness) {
+        if (Settings.putInt(Keys::BRIGHTNESS, brightness)) {
+            Serial.println("Brightness updated: " + String(brightness));
+        }
+    }
+
+    int getBrightness() {
+        return Settings.getInt(Keys::BRIGHTNESS, 100);
+    }
+
+    void setAutoOff(bool enabled) {
+        if (Settings.putBool(Keys::AUTO_OFF, enabled)) {
+            Serial.println("Auto-off updated: " + String(enabled ? "enabled" : "disabled"));
+        }
+    }
+
+    bool getAutoOff() {
+        return Settings.getBool(Keys::AUTO_OFF, false);
+    }
+
+    // Пароль точки доступа
+    void setAPPassword(const String& password) {
+        Settings.putString(Keys::AP_PASSWORD, password.c_str());
+    }
+
+    String getAPPassword() {
+        String password = Settings.getString(Keys::AP_PASSWORD);
+        if (password.length() == 0) {
+            // Генерируем новый если нет сохраненного
+            String mac = WiFi.macAddress();
+            password = generatePasswordFromMAC(mac);
+            setAPPassword(password);
+        }
+        return password;
+    }
+
+    // Hostname
+    void setHostname(const String& hostname) {
+        Settings.putString(Keys::HOSTNAME, hostname.c_str());
+    }
+
+    String getHostname() {
+        return Settings.getString(Keys::HOSTNAME, "klight");
+    }
+
+private:
+    String generatePasswordFromMAC(const String& mac) {
+        String clean_mac = mac;
+        clean_mac.replace(":", "");
+        String password = "";
+        int start = 0;
+        int end = clean_mac.length() - 1;
+        while (start < end) {
+            password += clean_mac[end--];
+            password += clean_mac[start++];
+        }
+        return password;
+    }
+
+public:
+    // Экспорт всех настроек
+    void printAllSettings() {
+        Serial.println("\n=== Device Settings ===");
+        Serial.printf("Device Name: %s\n", getDeviceName().c_str());
+        Serial.printf("Hostname: %s\n", getHostname().c_str());
+        Serial.printf("WiFi SSID: %s\n", getWiFiSSID().c_str());
+        Serial.printf("MQTT Server: %s:%d\n", getMQTTServer().c_str(), getMQTTPort());
+        Serial.printf("Brightness: %d\n", getBrightness());
+        Serial.printf("Auto Off: %s\n", getAutoOff() ? "enabled" : "disabled");
+        Serial.printf("AP Password: %s\n", getAPPassword().c_str());
+        Serial.println("=======================\n");
+    }
+
+    // Сброс к заводским настройкам
+    void factoryReset() {
+        Settings.clear();
+        Settings.commit();
+        _settingsLoaded = false;
+        begin(); // Перезагрузит настройки по умолчанию
+        Serial.println("Factory reset completed");
+    }
+
+    // Принудительное сохранение всех изменений
+    void save() {
+        Settings.commit();
+        Serial.println("Settings saved to flash");
+    }
+};
+
+// Определение статических констант
+const char* DeviceSettings::Keys::WIFI_SSID = "wifi_ssid";
+const char* DeviceSettings::Keys::WIFI_PASSWORD = "wifi_pass";
+const char* DeviceSettings::Keys::MQTT_SERVER = "mqtt_server";
+const char* DeviceSettings::Keys::MQTT_PORT = "mqtt_port";
+const char* DeviceSettings::Keys::MQTT_USER = "mqtt_user";
+const char* DeviceSettings::Keys::MQTT_PASSWORD = "mqtt_pass";
+const char* DeviceSettings::Keys::DEVICE_NAME = "device_name";
+const char* DeviceSettings::Keys::BRIGHTNESS = "brightness";
+const char* DeviceSettings::Keys::AUTO_OFF = "auto_off";
+const char* DeviceSettings::Keys::AP_PASSWORD = "ap_password";
+const char* DeviceSettings::Keys::HOSTNAME = "hostname";
+
+// Глобальный экземпляр
+DeviceSettings Config;
+Пример использования в проекте
+cpp
+void setup() {
+    Serial.begin(115200);
+    
+    // Инициализация настроек
+    if (!Config.begin()) {
+        Serial.println("Failed to initialize settings!");
+        return;
+    }
+    
+    // Печатаем текущие настройки
+    Config.printAllSettings();
+    
+    // Используем настройки
+    setupWiFi();
+    setupAccessPoint();
+    setupWebServer();
+}
+
+void setupWiFi() {
+    String ssid = Config.getWiFiSSID();
+    String password = Config.getWiFiPassword();
+    
+    if (ssid.length() > 0) {
+        WiFi.begin(ssid.c_str(), password.c_str());
+        Serial.println("Connecting to WiFi: " + ssid);
+    }
+}
+
+void setupAccessPoint() {
+    String apPassword = Config.getAPPassword();
+    String hostname = Config.getHostname();
+    
+    WiFi.softAP(Config.getDeviceName().c_str(), apPassword.c_str());
+    WiFi.hostname(hostname.c_str());
+    
+    Serial.println("AP started: " + Config.getDeviceName());
+    Serial.println("AP Password: " + apPassword);
+}
+
+void loop() {
+    // Автоматическое сохранение настроек (если были изменения)
+    Config.update();
+    
+    // Только чтение настроек
+    int brightness = Config.getBrightness();
+    String deviceName = Config.getDeviceName();
+    
+    // Ваша основная логика...
+    delay(100);
+}
+
+// Обработчик веб-формы для сохранения настроек
+void handleSaveSettings(const String& ssid, const String& password, int brightness) {
+    Config.setWiFiCredentials(ssid, password);
+    Config.setBrightness(brightness);
+    Config.save(); // Принудительно сохраняем после важных изменений
+}
+Преимущества использования FileData:
+Экономия памяти - использует файловую систему эффективнее
+
+Автоматическое сжатие - данные хранятся компактно
+
+Надежность - встроенные механизмы восстановления
+
+Простота - не нужно управлять адресами EEPROM
+
+Производительность - быстрое чтение/запись
+
+Теперь ваши настройки хранятся максимально эффективно! 🚀
