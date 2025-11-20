@@ -1,5 +1,5 @@
 {
   "name": "kitchen_light",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "KitchenLigth - led light control using ESP32C3mini and gustures with VL53L0X distance sensor"
 }
