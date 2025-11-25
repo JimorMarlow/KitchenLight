@@ -2,6 +2,8 @@
 
 // Вся конфигурация и платформозависимые настройки в pinout.h
 #include "pinout.h"
+#include "settings.h"
+settings::mgr settings_mgr;
 
 //////////////////////////////////////////////////////////
 #include "etl/etl_memory.h"
@@ -37,6 +39,7 @@ void setup() {
     
     Serial.printf("KitchenLight v%s started...\n", String(KL_VERSION_STRING).c_str());
 
+    settings_mgr.init();
   
     Serial.println("light control started...");
     light.init(LIGHT_CHANNEL, LIGHT_FREQUENCY, LIGHT_RESOLUTION); // Чтобы не было слышно пищания на низкой частоте - сделать 30КГц и максимально возможное разрешение 10 бит для плавности
