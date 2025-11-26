@@ -6,6 +6,7 @@
 #include "Arduino.h"
 #include "etl/etl_led.h"
 #include "etl/etl_memory.h"
+#include "settings.h"
 
 class light_control
 {
@@ -20,7 +21,7 @@ public:
     virtual void set_active(bool state);
 
     virtual float brightness() const;
-    virtual void set_brightness(float brightness);
+    virtual void set_brightness(float brightness_value);
 
     virtual void welcome_blink(); // отладочное мигание 
 
@@ -29,7 +30,8 @@ protected:
 
 private:
     bool    _state      = false;    // Велючен свет или нет
-    float   _brightness = 1.0;      // Целевой уровень яркости
+    //float   _brightness = 1.0;      // Целевой уровень яркости
+    etl::settings::data<settings::kitchen_light_t> _settings;   // Сохранение настроек в постоянной памяти
 
     etl::shared_ptr<etl::led> _led;
     uint32_t    _fade_toggle_duration = 1000; // ms, Вреия полного цикла переключения  
