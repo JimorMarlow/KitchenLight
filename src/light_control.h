@@ -6,6 +6,7 @@
 #include "Arduino.h"
 #include "etl/etl_led.h"
 #include "etl/etl_memory.h"
+#include "etl/etl_settings.h"
 #include "settings.h"
 
 class light_control
