@@ -7,7 +7,7 @@
 
 #define KL_VERSION_MAJOR 0
 #define KL_VERSION_MINOR 2
-#define KL_VERSION_PATCH 1
+#define KL_VERSION_PATCH 2
 
 // Хелпер для stringify
 #define KL_STRINGIFY_HELPER(x) #x
