@@ -2,9 +2,6 @@
 // Настройки проекта с сохранение в EEPROM или операционную систему
 
 #include <Arduino.h>
-#include <FileData.h>
-#include <LittleFS.h>
-
 namespace settings
 {
     const String kitchen_light_path = "/kitchen_light.cfg";

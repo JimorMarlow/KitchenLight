@@ -4,13 +4,18 @@
 light_control::light_control(etl::shared_ptr<etl::led> led, uint32_t fade_toggle_duration /*= 1000*/)
 : _led(led)
 , _fade_toggle_duration(fade_toggle_duration)
+#ifdef USE_SETTINGS
 , _settings(settings::kitchen_light_path, settings::kitchen_light_update_delay)
+#endif//USE_SETTINGS
 {
 }
 
 bool light_control::init(int pwm_channel, uint32_t frequency, uint8_t resolution)
 {
+#ifdef USE_SETTINGS
     _settings.init();
+#endif//USE_SETTINGS
+
     if(_led)
     {
         _led->init_pwm(pwm_channel, frequency, resolution);
@@ -21,7 +26,10 @@ bool light_control::init(int pwm_channel, uint32_t frequency, uint8_t resolution
 
 bool light_control::tick() // true - fade timer finished
 {
+#ifdef USE_SETTINGS
     _settings.tick();
+#endif//USE_SETTINGS
+
     if(_led) return _led->tick();
     return false;
 }
@@ -35,15 +43,21 @@ void light_control::set_active(bool state)
 }
 
 float light_control::brightness() const { 
-//    return _brightness; 
+#ifndef USE_SETTINGS
+    return _brightness; 
+#else 
     return _settings.get().brightness;
+#endif//USE_SETTINGS
 }
 void light_control::set_brightness(float brightness_value) 
 { 
-    //_brightness = etl::clamp<float>(brightness_value, 0.0, 1.0);
+#ifndef USE_SETTINGS
+    _brightness = etl::clamp<float>(brightness_value, 0.0, 1.0);
+#else 
     auto data = _settings.get();
     data.brightness = etl::clamp<float>(brightness_value, 0.0, 1.0);
     _settings.set(data);
+#endif//USE_SETTINGS
 
     if(is_active()) {
         fade_to(brightness());
